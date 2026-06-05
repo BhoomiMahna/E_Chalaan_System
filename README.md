@@ -1,77 +1,96 @@
 # Traffic E-Challan System - AI-Powered
 
-An intelligent traffic violation detection and management system using Computer Vision (YOLOv8), OCR, and AI-powered analytics.
+An intelligent, autonomous traffic violation detection and management system utilizing Computer Vision (YOLOv8), OCR, and a completely localized, **RAG-powered AI Analytics engine**.
 
-## Features
+## 🚀 Features
 
-- **Computer Vision**: YOLOv8-based detection of helmet and red-light violations
-- **OCR**: Automatic license plate extraction using EasyOCR
-- **Dashboard**: Real-time monitoring with charts and statistics
-- **AI Assistant**: Natural language queries, violation explanations, and predictive analytics
-- **Database**: SQLite (dev) / PostgreSQL (production) with SQLAlchemy ORM
+- **Computer Vision**: YOLOv8-based detection of helmet and red-light violations.
+- **OCR**: Automatic license plate extraction using EasyOCR.
+- **Dashboard**: Real-time monitoring with a perfectly integrated React UI.
+- **Local RAG AI Assistant**: Natural language querying, legal explanation generation, and automated reporting powered by a **Local LLM (Ollama)** and **ChromaDB**.
+- **Advanced Analytics**: Scikit-Learn based predictive forecasting and high-risk hotspot clustering.
+- **Enterprise Infrastructure**: Integrated Redis caching, Flask-Limiter rate limiting, and Celery background task processing.
+- **Database Migrations**: Fully tracked database schema using `Flask-Migrate` (Alembic).
 
-## Quick Start
+## ⚡ Quick Start (Recommended)
+
+The entire backend infrastructure is Dockerized.
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+
+- [Docker & Docker Compose](https://www.docker.com/)
+- [Ollama](https://ollama.com/) (For local AI features)
+- Node.js 18+ (For frontend)
 
-### Backend Setup
+### 1. Start the Backend Infrastructure
 
 ```bash
-cd backend
-pip install -r requirements.txt
-python seed_data.py      # Seed 250 demo violations
-python app.py            # Start Flask on port 5000
+# Spins up Flask, Redis, and the Celery worker
+docker-compose up --build
 ```
 
-### Frontend Setup
+### 2. Configure Local AI
+To utilize the AI features, ensure Ollama is running on your host machine and pull the LLM:
+```bash
+ollama run llama3
+```
 
+### 3. Start the Frontend Dashboard
 ```bash
 cd frontend
 npm install
-npm run dev              # Start Vite on port 5173
+npm run dev             
 ```
-
-### Open Dashboard
 Navigate to http://localhost:5173
 
-## API Endpoints
+---
+
+## 🛠️ Manual Backend Setup (Without Docker)
+
+```bash
+cd backend
+python -m venv venv
+
+
+pip install -r requirements.txt
+
+
+flask db upgrade
+python seed_data.py
+
+
+python scripts/ingest_data.py
+
+
+python app.py
+```
+*(Note: To use caching and async tasks natively without Docker, you must run a Redis server on `localhost:6379` and spin up a celery worker: `celery -A tasks.tasks.celery_app worker`)*
+
+## 📡 API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | /api/violations | Fetch all violations (paginated) |
-| GET | /api/violations/filter | Filter by type, date, vehicle |
-| POST | /api/violation | Create new violation |
-| GET | /api/stats | Dashboard statistics |
-| POST | /api/ai/query | Natural language query |
-| POST | /api/ai/explain/:id | AI explanation for violation |
-| GET | /api/ai/predict | Predictive analytics |
-| POST | /api/cv/process-video | Upload and process video |
-| POST | /api/cv/start-webcam | Start webcam processing |
-| GET | /api/health | Health check |
+| GET | `/api/violations` | Fetch all violations (paginated) |
+| GET | `/api/violations/filter` | Filter by type, date, vehicle |
+| POST | `/api/violation` | Create new violation |
+| POST | `/api/ai/query` | Ask natural language questions via Local RAG |
+| POST | `/api/ai/explain/:id` | Get AI legal explanations for a violation |
+| GET | `/api/analytics/report` | Fetch cached automated daily summaries |
+| GET | `/api/analytics/hotspots` | Fetch high-risk clustered locations |
+| GET | `/api/analytics/forecast` | Fetch 7-day predictive violation forecasts |
+| POST | `/api/cv/process-video` | Upload and process CCTV video |
 
-## AI Features
+## 🧠 Tech Stack
 
-1. **Query Agent**: Ask questions like "Show helmet violations today" or "Total fines this week"
-2. **Explanation Generator**: Get detailed AI-powered explanations for any violation
-3. **Prediction Model**: View high-risk areas, peak hours, and 7-day forecasts
-
-## Tech Stack
-
-- **Backend**: Flask, SQLAlchemy, SQLite
-- **Frontend**: React 18, Vite, Recharts, Lucide Icons
+- **Backend**: Flask, SQLAlchemy, Alembic
+- **AI & RAG**: LangChain, ChromaDB, HuggingFace (`all-MiniLM-L6-v2`), Ollama
+- **Infrastructure**: Redis, Celery, Docker, Flask-Limiter
+- **Frontend**: React 18, Vite, Recharts, TailwindCSS
 - **CV**: YOLOv8 (ultralytics), OpenCV, EasyOCR
-- **AI**: Google Gemini API, scikit-learn
 
-## Environment Variables
+## ⚙️ Environment Variables
 
 Copy `backend/.env.example` to `backend/.env` and configure:
-- `GEMINI_API_KEY`: Google Gemini API key (optional, enables AI features)
-- `DATABASE_URL`: Database connection string (defaults to SQLite)
-
-## Optional: Install CV Dependencies
-
-```bash
-pip install ultralytics opencv-python easyocr
-```
+- `LOCAL_LLM_MODEL`: e.g. `llama3` (defaults to llama3)
+- `VECTOR_DB_PATH`: `./chroma_db`
+- `REDIS_URL`: `redis://localhost:6379/0`
+- `CELERY_BROKER_URL`: `redis://localhost:6379/0`

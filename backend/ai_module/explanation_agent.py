@@ -16,11 +16,6 @@ class ExplanationAgent:
         'red_light': 'the vehicle was detected crossing the stop line while the traffic signal was red'
     }
 
-    FINE_CONTEXT = {
-        'no_helmet': 'As per Motor Vehicles Act, Section 129, riding without a helmet attracts a fine of ₹1,000.',
-        'red_light': 'As per Motor Vehicles Act, Section 119/177, jumping a red light attracts a fine of ₹5,000.'
-    }
-
     def __init__(self):
         self.gemini_model = None
         self._init_llm()
@@ -61,6 +56,8 @@ class ExplanationAgent:
 
     def _template_explain(self, v):
         """Generate explanation from template."""
+        from models.violation_fine import ViolationFine
+        
         vtype = v.get('violation_type', 'no_helmet')
         dt = v.get('date_time', '')
         if isinstance(dt, str) and dt:
@@ -75,8 +72,13 @@ class ExplanationAgent:
             date_str = str(dt)
             time_str = ''
 
-        description = self.VIOLATION_DESCRIPTIONS.get(vtype, 'a traffic violation was detected')
-        legal = self.FINE_CONTEXT.get(vtype, '')
+        fine_record = ViolationFine.query.filter_by(violation_type=vtype).first()
+        description = self.VIOLATION_DESCRIPTIONS.get(vtype, f"a {vtype.replace('_', ' ')} violation was detected")
+        
+        if fine_record:
+            legal = f"As per traffic regulations, a {vtype.replace('_', ' ')} violation attracts a base fine of ₹{fine_record.base_amount:,}."
+        else:
+            legal = ""
 
         explanation = (
             f"📋 **Violation Report**\n\n"

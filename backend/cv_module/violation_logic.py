@@ -52,23 +52,37 @@ def is_person_on_motorcycle(person_det, motorcycle_det, overlap_threshold=0.1):
     return vertical_proximity or calculate_iou(p_box, m_box) > overlap_threshold
 
 
-def check_helmet_region(person_det, frame=None):
+def check_helmet_region(person_det, frame, helmet_detector):
     """
-    Check if the person's head region suggests they are wearing a helmet.
-    This is a simplified check — production would use a dedicated helmet classifier.
-    
-    For the base COCO model, we look at the top portion of the person bounding box.
-    Returns True if helmet detected (no violation), False if no helmet (violation).
-    
-    NOTE: Without a custom helmet detection model, this returns False (violation)
-    for demo purposes. Replace with actual classifier for production.
+    Check if the person is wearing a helmet by cropping their head region
+    and passing it to a specialized helmet detection model.
     """
-    # In a real system, we'd crop the head region and run a helmet classifier
-    # For demo: we flag all motorcycle riders as potential violations
-    return False
+    if frame is None or helmet_detector is None:
+        # Fallback to violation if no frame or model
+        return False
+        
+    x1, y1, x2, y2 = person_det['bbox']
+    
+    # Calculate the upper 40% of the person's bounding box (head/shoulder region)
+    height = y2 - y1
+    head_y2 = y1 + int(height * 0.40)
+    
+    # Crop the image (ensure bounds are within frame)
+    h_frame, w_frame = frame.shape[:2]
+    crop_x1, crop_y1 = max(0, x1), max(0, y1)
+    crop_x2, crop_y2 = min(w_frame, x2), min(h_frame, head_y2)
+    
+    # If crop is invalid
+    if crop_y2 <= crop_y1 or crop_x2 <= crop_x1:
+        return False
+        
+    cropped_head = frame[crop_y1:crop_y2, crop_x1:crop_x2]
+    
+    # Run the dedicated helmet detection model
+    return helmet_detector.detect_helmet(cropped_head)
 
 
-def detect_violations(detections, frame=None, red_light_line_y=None):
+def detect_violations(detections, frame=None, red_light_line_y=None, helmet_detector=None):
     """
     Analyze detections to identify traffic violations.
     
@@ -76,6 +90,8 @@ def detect_violations(detections, frame=None, red_light_line_y=None):
         detections: List of detection dicts from YOLODetector
         frame: Original frame (for helmet region analysis)
         red_light_line_y: Y-coordinate of the stop line (for red-light violations)
+        helmet_detector: Instance of HelmetDetector for 2nd stage processing
+
     
     Returns:
         List of violation dicts:
@@ -99,7 +115,7 @@ def detect_violations(detections, frame=None, red_light_line_y=None):
     for moto in motorcycles:
         riders = [p for p in persons if is_person_on_motorcycle(p, moto)]
         for rider in riders:
-            has_helmet = check_helmet_region(rider, frame)
+            has_helmet = check_helmet_region(rider, frame, helmet_detector)
             if not has_helmet:
                 violations.append({
                     'type': 'no_helmet',

@@ -16,9 +16,11 @@ class VideoProcessor:
     def _init(self):
         try:
             from cv_module.detector import YOLODetector
+            from cv_module.helmet_detector import HelmetDetector
             from cv_module.ocr_engine import OCREngine
             from config import Config
             self.detector = YOLODetector(Config.YOLO_MODEL_PATH, Config.YOLO_CONFIDENCE_THRESHOLD)
+            self.helmet_detector = HelmetDetector(confidence=0.45)
             self.ocr_engine = OCREngine()
             self.frame_skip = Config.FRAME_SKIP
         except Exception as e:
@@ -58,7 +60,7 @@ class VideoProcessor:
         from cv_module.violation_logic import detect_violations
         dets = self.detector.detect(frame)
         if not dets: return []
-        viols = detect_violations(dets, frame)
+        viols = detect_violations(dets, frame, helmet_detector=self.helmet_detector)
         for v in viols:
             if self.ocr_engine and self.ocr_engine.is_available():
                 r = self.ocr_engine.extract_plate(frame, v.get('bbox'))
@@ -71,6 +73,7 @@ class VideoProcessor:
     def _store(self, vdata, frame=None):
         if not self.app: return
         from models.violation import db, Violation
+        from models.violation_fine import ViolationFine
         from config import Config
         with self.app.app_context():
             try:
@@ -83,11 +86,16 @@ class VideoProcessor:
                         import cv2; cv2.imwrite(os.path.join(d, fn), frame)
                         img_path = f'/violation_images/{fn}'
                     except: pass
+                
+                v_type = vdata['type']
+                fine_record = ViolationFine.query.filter_by(violation_type=v_type).first()
+                fine_amount = fine_record.base_amount if fine_record else 1000
+
                 v = Violation(
                     vehicle_number=vdata.get('vehicle_number','UNKNOWN'),
                     owner_name=self._rand_name(), address=self._rand_addr(),
-                    violation_type=vdata['type'],
-                    fine_amount=Config.FINE_AMOUNTS.get(vdata['type'], 1000),
+                    violation_type=v_type,
+                    fine_amount=fine_amount,
                     date_time=datetime.now(), location=vdata.get('location','Unknown'),
                     status='pending', image_path=img_path,
                     confidence=vdata.get('confidence', 0.0))

@@ -13,12 +13,20 @@ class ViolationController:
     @staticmethod
     def create_violation(data):
         """Create a new violation record."""
+        fine_amount = data.get('fine_amount')
+        v_type = data.get('violation_type', 'no_helmet')
+
+        if not fine_amount:
+            from models.violation_fine import ViolationFine
+            fine_record = ViolationFine.query.filter_by(violation_type=v_type).first()
+            fine_amount = fine_record.base_amount if fine_record else 1000
+
         violation = Violation(
             vehicle_number=data.get('vehicle_number', 'UNKNOWN'),
             owner_name=data.get('owner_name', 'Unknown Owner'),
             address=data.get('address', 'Address not available'),
-            violation_type=data.get('violation_type', 'no_helmet'),
-            fine_amount=data.get('fine_amount', 1000),
+            violation_type=v_type,
+            fine_amount=fine_amount,
             date_time=datetime.fromisoformat(data['date_time']) if 'date_time' in data else datetime.utcnow(),
             location=data.get('location', 'Unknown Location'),
             status=data.get('status', 'pending'),

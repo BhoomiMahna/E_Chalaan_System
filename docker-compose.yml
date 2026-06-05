@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - LOCAL_LLM_MODEL=llama3
+      - VECTOR_DB_PATH=/app/chroma_db
+    depends_on:
+      - redis
+    volumes:
+      - ./backend/instance:/app/instance
+      - ./backend/uploads:/app/uploads
+      - ./backend/violation_images:/app/violation_images
+      - ./backend/chroma_db:/app/chroma_db
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A tasks.tasks.celery_app worker --loglevel=info
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - LOCAL_LLM_MODEL=llama3
+      - VECTOR_DB_PATH=/app/chroma_db
+    depends_on:
+      - redis
+      - backend
+    volumes:
+      - ./backend/instance:/app/instance
+      - ./backend/chroma_db:/app/chroma_db

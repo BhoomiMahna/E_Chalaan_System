@@ -12,8 +12,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_migrate import Migrate
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from config import config
-from models.violation import db
+from models import db
+from core.startup_validator import validate_environment
 
 # Configure logging
 logging.basicConfig(
@@ -33,7 +37,18 @@ def create_app(config_name=None):
 
     # Initialize extensions
     db.init_app(app)
+    migrate = Migrate(app, db)
     CORS(app, origins=app.config.get('CORS_ORIGINS', ['http://localhost:5173']))
+
+    # Initialize Rate Limiter
+    limiter = Limiter(
+        app,
+        key_func=get_remote_address,
+        default_limits=[app.config.get('RATELIMIT_DEFAULT', '100/hour')],
+        storage_uri=app.config.get('RATELIMIT_STORAGE_URL', 'memory://')  # fallback to memory if redis fails
+    )
+    # Expose limiter to be used in other modules
+    app.limiter = limiter
 
     # Create upload directories
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)
@@ -43,15 +58,17 @@ def create_app(config_name=None):
     from routes.violations import violations_bp
     from routes.ai_routes import ai_bp
     from routes.cv_routes import cv_bp
+    from routes.analytics_routes import analytics_bp
 
     app.register_blueprint(violations_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(cv_bp)
+    app.register_blueprint(analytics_bp)
 
-    # Create database tables
+    # Validate Environment Variables on Startup
     with app.app_context():
-        db.create_all()
-        logger.info("Database tables created/verified.")
+        validate_environment()
+        logger.info("Environment variables verified.")
 
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])

@@ -60,16 +60,21 @@ class ViolationSimulator:
     @classmethod
     def generate_violations(cls, count=200):
         """Generate a batch of realistic violation records."""
+        from models.violation_fine import ViolationFine
+        
         violations = []
         now = datetime.now()
-        fine_amounts = {'no_helmet': 1000, 'red_light': 5000}
+        
+        # Dynamically fetch configured fine amounts
+        fine_records = ViolationFine.query.all()
+        fine_amounts = {f.violation_type: f.base_amount for f in fine_records}
+        if not fine_amounts:
+            fine_amounts = {'no_helmet': 1000, 'red_light': 5000}
+            
+        violation_types = list(fine_amounts.keys())
 
         for _ in range(count):
-            v_type = random.choices(
-                ['no_helmet', 'red_light'],
-                weights=[70, 30],  # Helmet violations more common
-                k=1
-            )[0]
+            v_type = random.choice(violation_types)
 
             # Spread across last 30 days with realistic time distribution
             days_ago = random.randint(0, 30)

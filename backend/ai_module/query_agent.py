@@ -1,92 +1,38 @@
 """
-Query Agent — Converts natural language questions to SQL queries.
-Uses Google Gemini API for NL→SQL conversion with a fallback keyword parser.
+Query Agent — Converts natural language questions using Local LLM and Vector DB.
+Maintains fallback keyword parser for structured database results to preserve UI compatibility.
 """
-import re
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
+from services.rag_service import RAGService
 
 logger = logging.getLogger(__name__)
 
-
 class QueryAgent:
-    """Converts natural language queries to SQL and executes them."""
+    """Answers natural language queries using RAG and returns tabular fallback data."""
 
     def __init__(self):
-        self.gemini_model = None
-        self._init_llm()
-
-    def _init_llm(self):
-        """Initialize Google Gemini client."""
-        try:
-            from config import Config
-            api_key = Config.GEMINI_API_KEY
-            if not api_key:
-                logger.info("No GEMINI_API_KEY set. Using keyword-based fallback.")
-                return
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-            logger.info("Gemini API initialized for query agent")
-        except ImportError:
-            logger.warning("google-generativeai not installed. Using fallback.")
-        except Exception as e:
-            logger.warning(f"Gemini init failed: {e}. Using fallback.")
+        self.rag_service = RAGService()
 
     def process(self, query_text):
         """Process a natural language query and return results."""
-        if self.gemini_model:
-            return self._process_with_llm(query_text)
-        return self._process_with_fallback(query_text)
-
-    def _process_with_llm(self, query_text):
-        """Use Gemini to convert NL to SQL and execute."""
-        schema = """
-        Table: violations
-        Columns:
-        - id (INTEGER, primary key)
-        - vehicle_number (VARCHAR(20))
-        - owner_name (VARCHAR(100))
-        - address (VARCHAR(200))
-        - violation_type (VARCHAR(20)) -- values: 'no_helmet', 'red_light'
-        - fine_amount (INTEGER) -- 1000 for no_helmet, 5000 for red_light
-        - date_time (DATETIME)
-        - location (VARCHAR(100))
-        - status (VARCHAR(20)) -- values: 'pending', 'paid', 'disputed'
-        - image_path (VARCHAR(200))
-        - confidence (FLOAT)
-        """
-
-        prompt = f"""Convert this natural language query to a SQLite SELECT query.
-Database schema: {schema}
-Today's date: {datetime.now().strftime('%Y-%m-%d')}
-Query: "{query_text}"
-
-Rules:
-- Return ONLY the SQL query, no explanation
-- Use SQLite date functions (date(), strftime())
-- For "today", use date(date_time) = date('now')
-- For "this week", use date_time >= date('now', '-7 days')
-- For "this month", use date_time >= date('now', '-30 days')
-- Always use SELECT, never UPDATE/DELETE/INSERT
-- Limit results to 50 rows max
-- If asking for a count/total, use COUNT(*) or SUM()
-"""
         try:
-            response = self.gemini_model.generate_content(prompt)
-            sql = response.text.strip()
-            # Clean markdown code blocks if present
-            sql = re.sub(r'```sql\s*', '', sql)
-            sql = re.sub(r'```\s*', '', sql)
-            sql = sql.strip()
+            # Query the Local RAG pipeline for an intelligent text answer
+            rag_answer = self.rag_service.ask(query_text)
 
-            # Safety: only allow SELECT
-            if not sql.upper().startswith('SELECT'):
-                return {'query': sql, 'error': 'Only SELECT queries allowed', 'results': []}
-
-            return self._execute_sql(sql, query_text)
+            # Get structured data from fallback to maintain UI table compatibility
+            fallback_result = self._process_with_fallback(query_text)
+            
+            # Combine the results. The frontend ignores extra fields, so adding 'answer' is safe.
+            return {
+                'query': query_text,
+                'sql': fallback_result.get('sql', ''),
+                'results': fallback_result.get('results', []),
+                'count': fallback_result.get('count', 0),
+                'answer': rag_answer  # New field powered by local LLM
+            }
         except Exception as e:
-            logger.error(f"LLM query failed: {e}")
+            logger.error(f"NLQ processing failed: {e}")
             return self._process_with_fallback(query_text)
 
     def _execute_sql(self, sql, original_query=''):
@@ -112,7 +58,7 @@ Rules:
             return {'query': original_query, 'sql': sql, 'error': str(e), 'results': []}
 
     def _process_with_fallback(self, query_text):
-        """Keyword-based fallback when LLM is unavailable."""
+        """Keyword-based fallback to return tabular results."""
         q = query_text.lower()
         sql = None
 
