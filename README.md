@@ -3,7 +3,7 @@
 <h1 align="center">🚦 AI-Powered Traffic E-Challan System</h1>
 
 <p align="center">
-  <img src="docs/architecture.jpeg" width="1000">
+  <img src="docs/architecture.jpeg" width="200">
 </p>
 
 <p align="center">
