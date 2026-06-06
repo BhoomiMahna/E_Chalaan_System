@@ -1,5 +1,15 @@
 # Traffic E-Challan System - AI-Powered
 
+<h1 align="center">🚦 AI-Powered Traffic E-Challan System</h1>
+
+<p align="center">
+  <img src="docs/architecture.jpeg" width="1000">
+</p>
+
+<p align="center">
+YOLOv8 • EasyOCR • ChromaDB • Llama 3 • React • Flask
+</p>
+
 An intelligent, autonomous traffic violation detection and management system utilizing Computer Vision (YOLOv8), OCR, and a completely localized, **RAG-powered AI Analytics engine**.
 
 ## 🚀 Features
